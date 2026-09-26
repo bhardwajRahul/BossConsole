@@ -7,6 +7,8 @@ import androidx.compose.runtime.mutableStateMapOf
  * Browser-owned navigation state presented by an optional native host toolbar.
  * Preserve this constructor when extending the contract; add compatible overloads instead.
  */
+// Constructor shape is the published plugin ABI; keep it compatible.
+@Suppress("LongParameterList")
 class BrowserTitleBarState(
     val url: String,
     val canGoBack: Boolean,
@@ -35,39 +37,66 @@ class BrowserTitleBarState(
  * A browser hides its toolbar when its window or handle is hosted.
  */
 object BrowserTitleBarBridge {
-    private class Entry(val owner: Any, val state: BrowserTitleBarState)
+    private class Entry(
+        val owner: Any,
+        val state: BrowserTitleBarState,
+    )
 
     private val entries = mutableStateMapOf<String, Entry>()
     private val windows = mutableStateMapOf<String, Boolean>()
 
-    fun hostWindow(windowId: String, enabled: Boolean) {
+    fun hostWindow(
+        windowId: String,
+        enabled: Boolean,
+    ) {
         if (enabled) windows[windowId] = true else windows.remove(windowId)
     }
 
     fun isWindowHosted(windowId: String): Boolean = windows[windowId] == true
 
-    private class Host(val owner: Any, val focus: () -> Unit)
+    private class Host(
+        val owner: Any,
+        val focus: () -> Unit,
+    )
+
     private val hosts = mutableStateMapOf<String, Host>()
     private val legacyHostOwner = Any()
 
     fun state(handleId: String): BrowserTitleBarState? = entries[handleId]?.state
 
-    fun publish(handleId: String, owner: Any, state: BrowserTitleBarState) {
+    fun publish(
+        handleId: String,
+        owner: Any,
+        state: BrowserTitleBarState,
+    ) {
         entries[handleId] = Entry(owner, state)
     }
 
-    fun remove(handleId: String, owner: Any) {
+    fun remove(
+        handleId: String,
+        owner: Any,
+    ) {
         if (entries[handleId]?.owner === owner) {
             entries.remove(handleId)
         }
     }
 
-    fun host(handleId: String, focus: (() -> Unit)?) = host(handleId, legacyHostOwner, focus)
+    fun host(
+        handleId: String,
+        focus: (() -> Unit)?,
+    ) = host(handleId, legacyHostOwner, focus)
 
     /** A disposed window cannot unregister the focus handler of a newer host. */
-    fun host(handleId: String, owner: Any, focus: (() -> Unit)?) {
-        if (focus != null) hosts[handleId] = Host(owner, focus)
-        else if (hosts[handleId]?.owner === owner) hosts.remove(handleId)
+    fun host(
+        handleId: String,
+        owner: Any,
+        focus: (() -> Unit)?,
+    ) {
+        if (focus != null) {
+            hosts[handleId] = Host(owner, focus)
+        } else if (hosts[handleId]?.owner === owner) {
+            hosts.remove(handleId)
+        }
     }
 
     fun isHosted(handleId: String): Boolean = hosts.containsKey(handleId)
@@ -86,6 +115,8 @@ object BrowserTitleBarBridge {
  * indicates that keyboard navigation currently selects a suggestion.
  * Preserve this constructor when extending the contract; add compatible overloads instead.
  */
+// Constructor shape is the published plugin ABI; keep it compatible.
+@Suppress("LongParameterList")
 class BrowserAddressBarState(
     val text: String,
     val selectionStart: Int,
