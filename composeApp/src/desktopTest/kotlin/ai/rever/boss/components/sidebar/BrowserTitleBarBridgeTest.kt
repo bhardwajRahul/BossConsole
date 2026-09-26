@@ -45,4 +45,21 @@ class BrowserTitleBarBridgeTest {
             BrowserTitleBarBridge.remove("moved-browser", replacement)
         }
     }
+
+    @Test
+    fun `old window cleanup preserves a browser moved to a new window`() {
+        val oldWindow = Any()
+        val newWindow = Any()
+        var focused = false
+        try {
+            BrowserTitleBarBridge.host("moved-focus", oldWindow) {}
+            BrowserTitleBarBridge.host("moved-focus", newWindow) { focused = true }
+            BrowserTitleBarBridge.host("moved-focus", oldWindow, null)
+            assertTrue(BrowserTitleBarBridge.focus("moved-focus"))
+            assertTrue(focused)
+        } finally {
+            BrowserTitleBarBridge.host("moved-focus", newWindow, null)
+        }
+        assertFalse(BrowserTitleBarBridge.isHosted("moved-focus"))
+    }
 }

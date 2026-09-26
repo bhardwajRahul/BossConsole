@@ -11,6 +11,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 
 /** Only the focused browser pane contributes navigation chrome to its window. */
@@ -21,6 +22,7 @@ internal fun nativeBrowserTitleActions(state: BossAppState): List<NativeTitleBar
     val browser = handleId?.let(BrowserTitleBarBridge::state)
     if (handleId == null || browser == null) return emptyList()
     val favicon = activeBrowserFavicon(state, browser.url)
+    val focusOwner = remember(handleId) { Any() }
     return buildList {
         add(
             NativeTitleBarAction(
@@ -48,7 +50,7 @@ internal fun nativeBrowserTitleActions(state: BossAppState): List<NativeTitleBar
                 onClick = browser.reloadOrStop,
             ),
         )
-        add(browserAddressAction(handleId, browser, favicon))
+        add(browserAddressAction(handleId, browser, favicon, focusOwner))
         add(
             NativeTitleBarAction(
                 "browser_bookmark",
@@ -92,6 +94,7 @@ private fun browserAddressAction(
     handleId: String,
     browser: ai.rever.boss.plugin.browser.BrowserTitleBarState,
     favicon: androidx.compose.ui.graphics.painter.Painter?,
+    focusOwner: Any,
 ): NativeTitleBarAction =
     NativeTitleBarAction(
         "browser_url",
@@ -101,7 +104,7 @@ private fun browserAddressAction(
                 handleId,
                 browser.url,
                 browser.navigate,
-                { BrowserTitleBarBridge.host(handleId, it) },
+                { BrowserTitleBarBridge.host(handleId, focusOwner, it) },
                 browser.address,
                 favicon,
             ),
