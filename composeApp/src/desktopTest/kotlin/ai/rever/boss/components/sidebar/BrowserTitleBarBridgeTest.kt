@@ -62,4 +62,20 @@ class BrowserTitleBarBridgeTest {
         }
         assertFalse(BrowserTitleBarBridge.isHosted("moved-focus"))
     }
+
+    @Test
+    fun `browser disposal leaves host focus ownership intact`() {
+        val browser = Any()
+        val host = Any()
+        try {
+            BrowserTitleBarBridge.publish("recomposed-browser", browser, state())
+            BrowserTitleBarBridge.host("recomposed-browser", host) {}
+            BrowserTitleBarBridge.remove("recomposed-browser", browser)
+            assertNull(BrowserTitleBarBridge.state("recomposed-browser"))
+            assertTrue(BrowserTitleBarBridge.focus("recomposed-browser"))
+        } finally {
+            BrowserTitleBarBridge.remove("recomposed-browser", browser)
+            BrowserTitleBarBridge.host("recomposed-browser", host, null)
+        }
+    }
 }
