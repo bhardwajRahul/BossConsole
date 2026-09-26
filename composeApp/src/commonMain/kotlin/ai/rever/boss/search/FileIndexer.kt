@@ -40,7 +40,7 @@ class FileIndexer(
     ) {
         indexingMutex.withLock {
             try {
-                if (!forceReindex && _indexedPath.value == projectPath && _indexedFiles.value.isNotEmpty()) {
+                if (!forceReindex && _indexedPath.value == projectPath) {
                     logger.debug(LogCategory.FILE, "Project already indexed", mapOf("path" to projectPath))
                     return@withLock
                 }
@@ -52,13 +52,8 @@ class FileIndexer(
                     scan?.invoke(projectPath)
                         ?: withContext(Dispatchers.IO) {
                             val result = ProjectFileDiscovery.discover(projectPath)
-                            if (result.incompleteReason != null) {
-                                throw ProjectDiscoveryIncompleteException(result.incompleteReason)
-                            }
-                            _indexError.value = result.warning
-                            result.files
-                                .map { IndexedFile(it.file.name, it.file.absolutePath, it.relativePath) }
-                                .sortedBy { it.lowerName }
+                            _indexError.value = result.incompleteReason ?: result.warning
+                            filenameIndexFrom(result)
                         }
                 _indexedFiles.value = discovery
                 _indexedPath.value = projectPath

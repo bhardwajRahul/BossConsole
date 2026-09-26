@@ -20,6 +20,7 @@ internal data class ProjectDiscoveryResult(
     val files: List<ProjectFile>,
     val incompleteReason: String? = null,
     val skippedDirectories: Int = 0,
+    val budgetExceeded: Boolean = false,
 ) {
     val warning: String?
         get() =
@@ -48,6 +49,7 @@ internal object ProjectFileDiscovery {
     private val defaultExcludedDirectories =
         setOf(
             ".git",
+            ".worktrees",
             ".hg",
             ".svn",
             ".idea",
@@ -188,7 +190,8 @@ internal object ProjectFileDiscovery {
                 "fileBudget" to MAX_FILES,
             ),
         )
-        return ProjectDiscoveryResult(files, reason)
+        val budgetExceeded = kind == "file budget" || kind == "directory budget"
+        return ProjectDiscoveryResult(files, reason, budgetExceeded = budgetExceeded)
     }
 
     private fun resolveRoot(projectPath: String): ProjectRoot? {

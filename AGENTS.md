@@ -1991,14 +1991,19 @@ them all back.
 - **The old file goes on being written, unchanged, every session.** `saveLastSessionBlocking` is
   untouched, so after a new-format save the directory holds BOTH: `Last_Session.json` with the
   layout that was on screen, and `Last_Session_Set.json` with all of them. Three things follow, all
-  deliberate: a downgrade still restores the Space that was showing, the "Last Session" entry the
-  Space list has always had is still there, and restore reads the SET first and falls back to the
+  deliberate: a downgrade still restores the Space that was showing, the "Last Session" entry is
+  available when explicitly enabled, and restore reads the SET first and falls back to the
   single file when there is none.
-- **A set is written only for two or more Spaces, and DELETED otherwise.** One running Space is
-  exactly what the old file records, and a second file saying the same thing is a second thing that
-  can disagree. The delete is not tidiness: the set is read in preference to the single file, so a
-  set left over from a three-Space session would reopen two Spaces the user had closed.
-  `sessionSetOf` answers both, and `isRestorable` asks the same question on the way back in.
+- **A set is written for one or more Spaces.** Even one Space needs its own identity restored;
+  `Last_Session.json` stamps its copy with `last-session` and cannot preserve that identity.
+  Empty sessions or an invalid active id delete the set. `sessionSetOf` and `isRestorable`
+  share this rule. The layout watcher now refreshes the set alongside the legacy recovery file,
+  so a crash cannot prefer an older identity-preserving snapshot over newer edits.
+- **The Last Session picker entry is opt-in.** Settings → Spaces → Session Restore has
+  `enableLastSessionSpace`, default false (including existing files with no field). UI and plugin
+  pickers consume `visibleWorkspaces`; `workspaces` retains recovery records for internal use.
+  Named Spaces restore unchanged. Legacy snapshots with no original identity are kept as a
+  normal Recovered Space instead of losing their tabs. The original recovery file is retained.
 - **Still ONE writer, still app-level (Issue #19).** `LastSessionCoordinator` allows exactly one
   window to produce the session record per session - every window's dispose used to write its own
   layout into the one record, so closing a secondary window overwrote the primary's. That has not
