@@ -160,8 +160,7 @@ internal fun BossAppStartupEffects(state: BossAppState) {
             canSave = { state.workspaceRestorationComplete && !state.sessionRestoreRefused },
             // Every Space this window is running, and which one is showing - so a restart brings
             // the whole window back rather than the one Space that happened to be on screen.
-            // Null for a window running fewer than two, which the single-Space record below
-            // already describes on its own; see `sessionSetOf`.
+            // Even one Space needs a set to preserve its id; see `sessionSetOf`.
             extractSet = {
                 sessionSetOf(
                     spaces =
@@ -617,8 +616,7 @@ internal fun BossAppStartupEffects(state: BossAppState) {
                     if (isFirstWindow) {
                         // The multi-Space record first, and the single-Space one only when there
                         // is none. An installed build upgrading into this has only
-                        // `Last_Session.json`, and a session that ran one Space deliberately
-                        // writes no set - so the fallback is the normal path, not an error path.
+                        // `Last_Session.json`, so the fallback still preserves older sessions.
                         // Read here rather than up front because this branch is reached at most
                         // once: `loadWorkspace` below sets currentWorkspace, which is the guard
                         // on this whole block.
@@ -643,12 +641,7 @@ internal fun BossAppStartupEffects(state: BossAppState) {
                             state.sessionRestoreRefused = restored.size != sessionSet.spaces.size
                         } else if (lastSessionConfig != null) {
                             // Ensure it has the correct ID
-                            val configWithId =
-                                if (lastSessionConfig.id != LAST_SESSION_ID) {
-                                    lastSessionConfig.copy(id = LAST_SESSION_ID)
-                                } else {
-                                    lastSessionConfig
-                                }
+                            val configWithId = prepareSessionSpace(lastSessionConfig)
                             // Apply the last session workspace FIRST
                             // Before applyWorkspace, which is what selects the recorded
                             // project: the effect watching selectedProject.path has to be
@@ -842,7 +835,7 @@ internal fun BossAppStartupEffects(state: BossAppState) {
                     delay(LAYOUT_SETTLE_MS)
                     if (state.sessionRestoreRefused) return@launch
 
-                    // ONE write, and it is the Last Session record - never the named Space the
+                    // Recovery snapshots only - never the named Space the
                     // user is working in, whose file is written by an explicit save alone. See
                     // `layoutWatcherWrite`, which owns that decision, and note that the manager's
                     // current workspace IS still refreshed: it is the in-memory "Space I am in, as
@@ -853,8 +846,8 @@ internal fun BossAppStartupEffects(state: BossAppState) {
                             live = currentLayout,
                             now = Clock.System.now().toEpochMilliseconds(),
                         )
-                    workspaceManager.updateCurrentWorkspace(write.current)
-                    workspaceManager.saveLastSessionRecord(write.record)
+                    updateSessionSpace(write.current, splitViewState)
+                    saveSessionRecovery(write.record, splitViewState)
                 }
         }.launchIn(this)
 

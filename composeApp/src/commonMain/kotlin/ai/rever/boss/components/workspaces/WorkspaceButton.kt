@@ -98,7 +98,7 @@ fun WorkspaceButton(
     val windowId = LocalWindowId.current
     val saveOwner = windowId?.let(SplitViewStateRegistry::getState)
     val currentWorkspace by workspaceManager.currentWorkspace.collectAsState()
-    val workspaces by workspaceManager.workspaces.collectAsState()
+    val workspaces by workspaceManager.visibleWorkspaces.collectAsState()
 
     // A BOSS theme belongs to a Space, so this menu is where one is given: both are collected
     // rather than read, because the submenu's tick has to move the moment the theme does - the

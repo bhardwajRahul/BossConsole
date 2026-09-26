@@ -410,7 +410,7 @@ internal fun BossAppDialogs(state: BossAppState) {
     // "Which Space?" - raised by "New Space" in the project-open dialog, and by the
     // project-selection effect when a plugin selects a project and the setting is `ask`.
     state.pendingWorkspacePrompt?.let { prompt ->
-        val workspaces by workspaceManager.workspaces.collectAsState()
+        val workspaces by workspaceManager.visibleWorkspaces.collectAsState()
         SelectWorkspaceDialog(
             projectName = prompt.project.name,
             projectIsOpen = !prompt.placeOnPick,

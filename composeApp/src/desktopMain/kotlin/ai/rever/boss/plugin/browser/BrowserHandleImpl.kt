@@ -3405,6 +3405,14 @@ internal class BrowserHandleImpl(
                 .removePrefix("www.")
         }.getOrDefault("")
 
+    /** Explicit hand-off from the native address field after committing navigation. */
+    internal fun focusPageAfterAddressCommit() {
+        if (isValid && currentViewState != null) {
+            runCatching { browser.focus() }
+                .onFailure { logger.debug(LogCategory.BROWSER, "Could not focus page after address commit") }
+        }
+    }
+
     /**
      * Brings the window holding this tab back to the front.
      *
@@ -3417,6 +3425,7 @@ internal class BrowserHandleImpl(
      * plugin that never registered a fullscreen handler - this degrades to raising the window,
      * which is what it did before and is still useful.
      */
+
     private fun returnToTab() {
         runCatching { WindowFocusManager.focusWindow(currentWindowId) }
         ownerTabId?.let { tabId ->

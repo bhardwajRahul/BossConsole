@@ -16,16 +16,25 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 
 /**
  * What a drag would do to one panel, as far as that panel's highlight is concerned.
@@ -72,27 +81,55 @@ internal fun PanelDropZoneOverlay(
             derivedStateOf { panelDropHighlightFor(tabDragComponent.dropTarget, panelId) }
         }
 
-    Box(modifier = Modifier.fillMaxSize().padding(start = leadingInset)) {
-        // Both edges of an axis light up together: a vertical split takes the left AND the right.
-        when (highlight) {
-            PanelDropHighlight.SPLIT_VERTICAL -> {
-                DropZoneBand(Alignment.CenterStart, acrossWidth = true)
-                DropZoneBand(Alignment.CenterEnd, acrossWidth = true)
+    val density = LocalDensity.current.density
+    var region by remember { mutableStateOf<IntRect?>(null) }
+    Box(
+        Modifier.fillMaxSize().padding(start = leadingInset).onGloballyPositioned {
+            val bounds = it.boundsInWindow()
+            region =
+                IntRect(
+                    (bounds.left / density).roundToInt(),
+                    (bounds.top / density).roundToInt(),
+                    (bounds.right / density).roundToInt(),
+                    (bounds.bottom / density).roundToInt(),
+                )
+        },
+    ) {
+        // Only mount a native window during an active highlight. The drag's source retains
+        // the mouse grab, as it does for OverlayGhost; this overlay takes no keyboard focus.
+        val bounds = region
+        if (highlight != null && overlayCornerIsHeavyweight() && bounds != null) {
+            val size = DpSize(bounds.width.dp, bounds.height.dp)
+            OverlayCorner(Alignment.TopStart, size, regionInWindow = bounds) {
+                Box(Modifier.size(size)) { PanelDropHighlightContent(highlight) }
             }
-
-            PanelDropHighlight.SPLIT_HORIZONTAL -> {
-                DropZoneBand(Alignment.TopCenter, acrossWidth = false)
-                DropZoneBand(Alignment.BottomCenter, acrossWidth = false)
-            }
-
-            // "Add to this panel", which is the whole panel rather than one of its edges - and so
-            // a fainter wash, since it covers content the user is still meant to read.
-            PanelDropHighlight.CENTRE -> {
-                Box(modifier = Modifier.fillMaxSize().alpha(0.15f).background(BossTheme.colors.signal))
-            }
-
-            null -> {}
+        } else {
+            PanelDropHighlightContent(highlight)
         }
+    }
+}
+
+@Composable
+private fun BoxScope.PanelDropHighlightContent(highlight: PanelDropHighlight?) {
+    // Both edges of an axis light up together: a vertical split takes the left AND the right.
+    when (highlight) {
+        PanelDropHighlight.SPLIT_VERTICAL -> {
+            DropZoneBand(Alignment.CenterStart, acrossWidth = true)
+            DropZoneBand(Alignment.CenterEnd, acrossWidth = true)
+        }
+
+        PanelDropHighlight.SPLIT_HORIZONTAL -> {
+            DropZoneBand(Alignment.TopCenter, acrossWidth = false)
+            DropZoneBand(Alignment.BottomCenter, acrossWidth = false)
+        }
+
+        // "Add to this panel", which is the whole panel rather than one of its edges - and so
+        // a fainter wash, since it covers content the user is still meant to read.
+        PanelDropHighlight.CENTRE -> {
+            Box(modifier = Modifier.fillMaxSize().alpha(0.15f).background(BossTheme.colors.signal))
+        }
+
+        null -> {}
     }
 }
 

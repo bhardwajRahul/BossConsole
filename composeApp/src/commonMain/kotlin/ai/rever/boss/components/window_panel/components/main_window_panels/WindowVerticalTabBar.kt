@@ -349,6 +349,7 @@ fun BoxScope.WindowRevealedTabBarDrawer(
      */
     footer: @Composable () -> Unit = {},
     belowMap: @Composable () -> Unit = {},
+    railWidth: Dp = tabBarRailWidth,
 ) {
     // Built here rather than taken as a parameter: dismissing a drawer is the drawer's own
     // business, and the pointer state it needs is a composable read the caller had to make on the
@@ -361,7 +362,7 @@ fun BoxScope.WindowRevealedTabBarDrawer(
         hoverSource = reveal.drawerHover,
         hoverEnabled = bar.hoverExpand,
         width = bar.width,
-        railWidth = tabBarRailWidth,
+        railWidth = railWidth,
         panelRegion = contentRegion,
         onDismissOutside = reveal.dismissOutside,
     ) {

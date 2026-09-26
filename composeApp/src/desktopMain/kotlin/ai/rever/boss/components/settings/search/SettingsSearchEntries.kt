@@ -386,6 +386,8 @@ private fun workspaceEntries() =
     section(SettingsSection.WORKSPACE) {
         group("Default Space", "workspace", "workspaces")
         group("When Switching Spaces", "workspace", "workspaces")
+        group("Session Restore", "workspace", "workspaces", "last session", "startup", "restore")
+        setting("Enable Last Session Space", "Session Restore", "startup", "restore", "recovery")
         group("About Spaces", "workspace", "workspaces")
         sectionLevel("workspace", "workspaces", "layout", "template")
     }

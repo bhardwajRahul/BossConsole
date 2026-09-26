@@ -33,6 +33,7 @@ import ai.rever.boss.components.plugin.TabUpdateRegistry
 import ai.rever.boss.components.plugin.providers.publishSystemEvent
 import ai.rever.boss.components.plugin.tab_types.PanelHostTabInfo
 import ai.rever.boss.components.plugin.tab_types.fluck.FluckTabInfo
+import ai.rever.boss.components.sidebar.rememberPaneStripMenu
 import ai.rever.boss.components.tabs_navigation.TabsNavigation
 import ai.rever.boss.components.window_panel.SplitDirection
 import ai.rever.boss.components.window_panel.SplitOrientation
@@ -1152,7 +1153,7 @@ fun BossTabsComponent.BossMainPanel(
             splitViewState = splitViewState,
             currentPanelId = currentPanelId,
             focusRequester = focusRequester,
-            vertical = true,
+            vertical = false,
         )
 
     // Read here rather than passed down like `showTabBar`.
@@ -1289,7 +1290,7 @@ fun BossTabsComponent.BossMainPanel(
                 // The strip's empty space offers what the vertical bar's does, this pane's "+"
                 // included - so "New Tab" from a background pane's strip lands in THAT pane
                 // rather than in whichever one the bar happens to lead.
-                menuItems = rememberBarMenuItems(openNewTab = { paneNewTab?.invoke() }),
+                menuItems = rememberPaneStripMenu(openNewTab = { paneNewTab?.invoke() }),
                 // removeTab, the same call the tab's own Close Tab menu entry makes, so a tab
                 // closed from the strip and one closed from the sidebar go the same way.
                 onClose = { index -> removeTab(index) },

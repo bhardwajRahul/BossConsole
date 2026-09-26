@@ -473,7 +473,8 @@ fun GlobalSearchDialog(
                                 EmptySearchState()
                             }
 
-                            isIndexing -> {
+                            isIndexing && filteredResults.isEmpty() &&
+                                dialogState.activeCategory == SearchCategory.FILES -> {
                                 IndexingState()
                             }
 

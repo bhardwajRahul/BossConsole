@@ -141,6 +141,12 @@ class WorkspaceManager(
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
+    /** Picker list; recovery records remain available internally even when the slot is hidden. */
+    val visibleWorkspaces: StateFlow<List<LayoutWorkspace>> =
+        combine(workspaces, WorkspaceSettingsManager.currentSettings) { spaces, settings ->
+            visibleSessionSpaces(spaces, settings.enableLastSessionSpace)
+        }.stateIn(scope, SharingStarted.Eagerly, emptyList())
+
     /**
      * The file each Space was LOADED from, by id, for the ones whose path predates
      * [WorkspaceFileManagerCommon.fileNameForId].
@@ -569,7 +575,7 @@ class WorkspaceManager(
      * The multi-Space session record on disk, or null when there is none or it cannot be read.
      *
      * Null is the ordinary answer, not an error: an installed build upgrading into this has only
-     * `Last_Session.json`, and a single-Space session deliberately writes no set. A file that
+     * `Last_Session.json`. New builds write a set even for a single Space to retain its id. A file that
      * cannot be parsed is also null, so a truncated or hand-broken record falls back to the
      * single-Space restore rather than failing the launch.
      */

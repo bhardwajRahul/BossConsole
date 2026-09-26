@@ -73,8 +73,11 @@ import ai.rever.boss.window.LocalWindowId
 import ai.rever.boss.window.LocalWindowProjectState
 import ai.rever.boss.window.LocalWindowRunnerState
 import ai.rever.boss.window.MenuActionsHandler
+import ai.rever.boss.window.NativeSidebarTitleBar
+import ai.rever.boss.window.NativeTitleBarAction
 import ai.rever.boss.window.TabBarPosition
 import ai.rever.boss.window.WindowAppearanceSettings
+import ai.rever.boss.window.usesNativeSidebarTitleBar
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
@@ -94,6 +97,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -108,6 +112,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -290,11 +295,13 @@ internal fun BossAppScaffold(
     // What is actually drawn, which is what these two rules are about - a bar focus mode is
     // clearing is not on screen however the preference reads. See asDrawn.
     val drawn = appearance.asDrawn(focusModeSettings)
+    val sidebarInHeader = usesNativeSidebarTitleBar(SystemUtils.isMacOS, appearance.tabBarPosition)
+    val sidebarToggleRequests = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+    var nativeHeaderReady by remember { mutableStateOf(false) }
+    var sidebarLeading by remember { mutableStateOf(0f) }
 
-    // Whether the hover-revealed bar is up, reported by SplitViewPanel. The placement decision
-    // deliberately ignores it (the rail keeps its actions while the drawer is open - see
-    // verticalBarHost), but the value and its reporting chain are kept as a documented hedge
-    // for a future decision that does need the drawer's state.
+    // The drawer takes the host actions when the header replaces the rail. Its visibility is
+    // reported by SplitViewPanel, which owns the measured layout and drawer state.
     var drawerVisible by remember { mutableStateOf(false) }
 
     // Whether the bar in the layout is the RAIL, reported by SplitViewPanel once it has measured.
@@ -325,6 +332,7 @@ internal fun BossAppScaffold(
             tabBarOnLeft = appearance.tabBarPosition == TabBarPosition.LEFT,
             barCollapsed = barRailed,
             drawerVisible = drawerVisible,
+            hideCollapsedRail = sidebarInHeader,
         )
 
     // Whether the collapsed tab-bar rail has enough height for its quick actions.
@@ -348,6 +356,7 @@ internal fun BossAppScaffold(
                     showTopBar = reveal.showTopBar,
                     verticalBar = verticalBar,
                     railActionsFit = railActionsFit,
+                    titleBarAvailable = nativeHeaderReady,
                 ),
         )
 
@@ -384,6 +393,7 @@ internal fun BossAppScaffold(
             railActionsFit = railActionsFit,
             // Only consulted once the bar has offered nothing, i.e. in TOP position.
             panelFootAvailable = panelFootAvailable(panelFooterEdge, panelFootFits),
+            titleBarAvailable = nativeHeaderReady,
         )
 
     // Where the way into the plugins goes, when a strip that would normally hold their icons is
@@ -412,10 +422,12 @@ internal fun BossAppScaffold(
     val bannerVisible by remember(updateHandle) {
         updateHandle.updateState.map { it.drawsBanner() }.distinctUntilChanged()
     }.collectAsState(initial = false)
+    // Both rows keep the sidebar bubble below the chrome and own its button's selected state.
+    val sidebarBelowTopChrome = bannerVisible || (appearance.showTopBar && reveal.showTopBar)
 
     val trafficLights =
         macTrafficLightInset(
-            appearance = drawn,
+            appearance = drawn.copy(showTitleBar = drawn.showTitleBar || sidebarInHeader),
             isMacOs = SystemUtils.isMacOS,
             bannerVisible = bannerVisible,
             // The MEASURED rail, not the preference: a bar rails itself on a narrow window too.
@@ -527,17 +539,33 @@ internal fun BossAppScaffold(
         ) {
             // Use Box to allow overlaying the drag ghost
             Column(modifier = Modifier.fillMaxSize()) {
+                val workspaceSwitch = rememberWorkspaceSwitch(state, splitViewState)
+                val applyWorkspaceAndPreserve = workspaceSwitch.request
+                WorkspaceSwitchPrompt(state, workspaceSwitch)
                 // Title bar - conditionally shown based on settings
                 // Default: hidden on Linux/Windows, shown on macOS
                 // Also drawn when the traffic lights have nowhere else to go: with no left strip
                 // and the tab bar across the top, the only thing under them is the content, and a
                 // full-width reserve costs no more than padding the content would. See
                 // TrafficLightInset.CONTENT.
-                if (trafficLights.needsTitleRow(appearance.showTitleBar)) {
-                    BossTitleBar(
-                        onToggleMaximize = onToggleMaximize,
-                    )
-                }
+                SidebarTitleBar(
+                    appearance = appearance,
+                    trafficLights = trafficLights,
+                    barRailed = barRailed,
+                    drawerVisible = drawerVisible,
+                    sidebarLeading = sidebarLeading,
+                    sidebarBelowTopChrome = sidebarBelowTopChrome,
+                    toggleRequests = sidebarToggleRequests,
+                    state = state,
+                    spaceAction =
+                        nativeSpaceTitleAction(
+                            splitViewState,
+                            selectedProject.name,
+                            workspaceSwitch.requestFromTitleBar,
+                        ),
+                    onNativeReadyChange = { nativeHeaderReady = it },
+                    onToggleMaximize = onToggleMaximize,
+                )
 
                 // Update banner - always visible (even in focus mode)
                 val updateState by updateHandle.updateState.collectAsState()
@@ -615,9 +643,6 @@ internal fun BossAppScaffold(
                 // apply" is two places for that order to drift, and the order is the whole of why
                 // switching away and back does not lose a layout. See WorkspaceSwitch.kt for why
                 // a switch is two decisions rather than one.
-                val workspaceSwitch = rememberWorkspaceSwitch(state, splitViewState)
-                val applyWorkspaceAndPreserve = workspaceSwitch.request
-                WorkspaceSwitchPrompt(state, workspaceSwitch)
 
                 // Top bar - hidden in focus mode with smooth expand/shrink animation, and switched
                 // off outright by the appearance preference. Both have to agree for a bar to show:
@@ -658,6 +683,7 @@ internal fun BossAppScaffold(
                             // Clearance for the macOS traffic lights, which are drawn over this
                             // bar's start when there is no title row above it.
                             startInset = trafficLights.barStartInset(),
+                            showHostActions = !nativeHeaderReady,
                             onShowSearch = {
                                 state.showGlobalSearchDialog = true
                             },
@@ -772,6 +798,9 @@ internal fun BossAppScaffold(
                             },
                             onDrawerVisibleChange = { visible -> drawerVisible = visible },
                             onBarRailedChange = { railed -> barRailed = railed },
+                            sidebarToggleRequests = sidebarToggleRequests.takeIf { sidebarInHeader },
+                            onSidebarLeadingChange = { sidebarLeading = it },
+                            sidebarExtendsIntoTitleBar = !sidebarBelowTopChrome,
                             verticalBarBelowMap = {
                                 VerticalBarHostActions(
                                     actions =
@@ -1013,14 +1042,16 @@ private fun BossDraggableComponent.hostActionsPanelColumn(needsAHome: Boolean): 
  * Reads the rail measurement, never the panel measurement it gates. The rail owns a separate
  * column, so putting actions in the panel cannot change the rail fit and create a cycle.
  */
+@Suppress("LongParameterList")
 internal fun hostActionsNeedAPanel(
     settings: FocusModeSettings,
     topBarHidden: Boolean,
     showTopBar: Boolean,
     verticalBar: VerticalBarHost,
     railActionsFit: Boolean,
+    titleBarAvailable: Boolean = false,
 ): Boolean =
-    focusQuickActionsVisible(settings, topBarHidden, showTopBar) &&
+    !titleBarAvailable && focusQuickActionsVisible(settings, topBarHidden, showTopBar) &&
         (verticalBar == VerticalBarHost.NONE || (verticalBar == VerticalBarHost.RAIL && !railActionsFit))
 
 /**
@@ -1059,3 +1090,77 @@ private fun hostActionsRowSize(
     hasToolbox: Boolean,
     hasLauncher: Boolean,
 ): Int = FOCUS_QUICK_ACTION_COUNT - (if (hasToolbox) 0 else 1) + (if (hasLauncher) 1 else 0)
+
+/** Keep the sidebar's header available even when the optional title text is off. */
+@Composable
+private fun SidebarTitleBar(
+    appearance: WindowAppearanceSettings,
+    trafficLights: TrafficLightInset,
+    barRailed: Boolean,
+    drawerVisible: Boolean,
+    toggleRequests: MutableSharedFlow<Unit>,
+    state: BossAppState,
+    spaceAction: NativeTitleBarAction,
+    sidebarLeading: Float,
+    sidebarBelowTopChrome: Boolean,
+    onNativeReadyChange: (Boolean) -> Unit,
+    onToggleMaximize: (() -> Unit)?,
+) {
+    if (!SystemUtils.isMacOS) {
+        if (trafficLights.needsTitleRow(appearance.showTitleBar)) BossTitleBar(onToggleMaximize = onToggleMaximize)
+    } else {
+        val sidebarInHeader = appearance.tabBarPosition == TabBarPosition.LEFT
+        if (!sidebarInHeader && !trafficLights.needsTitleRow(appearance.showTitleBar)) return
+        val toggleSidebar: () -> Unit = { toggleRequests.tryEmit(Unit) }
+        val title = if (appearance.showTitleBar) spaceAction.label else ""
+        val expanded = !barRailed || drawerVisible
+        val sidebarWidth = if (expanded) appearance.tabBarVerticalWidth + 8f else 0f
+        val actions =
+            sidebarTitleActions(state, toggleSidebar, sidebarWidth, sidebarLeading, sidebarBelowTopChrome) +
+                spaceAction + nativeBrowserTitleActions(state)
+        val nativeReady = sidebarInHeader && NativeSidebarTitleBar(title, actions)
+        NativeBrowserHostAvailability(state.windowId, nativeReady)
+        SideEffect { onNativeReadyChange(nativeReady) }
+        DisposableEffect(Unit) { onDispose { onNativeReadyChange(false) } }
+        if (nativeReady) return
+        BossTitleBar(
+            title = title,
+            onToggleMaximize = onToggleMaximize,
+            onToggleSidebar = toggleSidebar.takeIf { sidebarInHeader },
+            sidebarExpanded = expanded && sidebarBelowTopChrome,
+        )
+    }
+}
+
+/** Native buttons call the same window-scoped entry points as their Compose counterparts. */
+private fun sidebarTitleActions(
+    state: BossAppState,
+    toggleSidebar: () -> Unit,
+    sidebarWidth: Float,
+    sidebarLeading: Float,
+    sidebarBelowTopChrome: Boolean,
+): List<NativeTitleBarAction> =
+    buildList {
+        add(
+            NativeTitleBarAction(
+                "sidebar",
+                "Toggle sidebar",
+                "sidebar.left",
+                active = sidebarBelowTopChrome && sidebarWidth > 0f,
+                sidebarWidth = sidebarWidth,
+                sidebarLeading = sidebarLeading,
+                onClick = toggleSidebar,
+            ),
+        )
+        addAll(nativeSessionTitleActions(state))
+        add(NativeTitleBarAction("search", "Search", "magnifyingglass") { state.showGlobalSearchDialog = true })
+        add(NativeTitleBarAction("tools", "Tools menu", "square.grid.2x2") { state.showToolLauncherDialog = true })
+        state.draggablePanelComponent.toolboxSidebarItem()?.let { item ->
+            add(
+                NativeTitleBarAction("toolbox", item.label, icon = item.icon) {
+                    state.draggablePanelComponent.handleSidebarItemClick(item)
+                },
+            )
+        }
+        add(nativeMoreTitleAction(state))
+    }
